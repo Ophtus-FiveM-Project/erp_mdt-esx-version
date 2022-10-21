@@ -2594,6 +2594,7 @@ $(document).ready(() => {
     }
 
     window.addEventListener('message', function (event) {
+        console.log(event)
         let e = event.data;
         $(".dispatch-msg-notif").fadeIn(500)
         if (e.type == "show") {

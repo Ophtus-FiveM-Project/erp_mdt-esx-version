@@ -2,17 +2,26 @@ local isOpen = false
 local callSign = ""
 local PlayerData = {}
 
-RegisterNetEvent('echorp:playerSpawned') -- Use this to grab player info on spawn.
-AddEventHandler('echorp:playerSpawned', function(sentData) PlayerData = sentData end)
 
-RegisterNetEvent('echorp:updateinfo')
-AddEventHandler('echorp:updateinfo', function(toChange, targetData) 
-    PlayerData[toChange] = targetData
+-- Change Event Name for esx
+RegisterNetEvent('esx:playerLoaded')
+AddEventHandler('esx:playerLoaded', function(sentData)
+    PlayerData = sentData
+
+    PlayerData['job']['isPolice'] = PlayerData['job']['name'] == 'police'
 end)
 
-RegisterNetEvent('echorp:doLogout') -- Use this to logout.
-AddEventHandler('echorp:doLogout', function(sentData) 
-    PlayerData = {} 
+
+RegisterNetEvent('esx:setJob')
+AddEventHandler('esx:setJob', function(Job)
+    PlayerData['job'] = Job;
+    PlayerData['job']['isPolice'] = PlayerData['job']['name'] == 'police'
+end)
+
+-- Not change because it's not used
+RegisterNetEvent('esx:onPlayerLogout') -- Use this to logout.
+AddEventHandler('esx:onPlayerLogout', function(sentData)
+    PlayerData = {}
 end)
 
 function EnableGUI(enable)
@@ -874,20 +883,28 @@ AddEventHandler('erp_mdt:setRadio', function(radio, name)
         end]]
         exports["pma-voice"]:setVoiceProperty("radioEnabled", true)
         exports["pma-voice"]:setRadioChannel(tonumber(radio))
-        exports['erp_notifications']:SendAlert('inform', 'Your radio frequency was set to: '.. radio .. ' MHz, by '..name..'', 7500)
+        exports['dt-notifyAlert']:infoMessage("RADIO",'Your radio frequency was set to:<br>'..radio..' MHz.',5000)
+        -- exports['erp_notifications']:SendAlert('inform', 'Your radio frequency was set to: '.. radio .. ' MHz, by '..name..'', 7500)
     end
 end)
 
-RegisterNetEvent('erp_mdt:sig100')
+-- RegisterNetEvent('erp_mdt:sig100')
+exports['Bifrost']:registerEvent('erp_mdt:sig100')
 AddEventHandler('erp_mdt:sig100', function(radio, type)
     local job = PlayerData['job']
     if (job.isPolice or job.name == 'ambulance') and job.duty == 1 then
         if type == true then
-            exports['erp_notifications']:PersistentAlert("START", "signall100-"..radio, "inform", "Radio "..radio.." is currently signal 100!")
+            --[[
+                Dispatch Alert ?
+            ]]
+            -- exports['erp_notifications']:PersistentAlert("START", "signall100-"..radio, "inform", "Radio "..radio.." is currently signal 100!")
         end
     end
     if not type then
-        exports['erp_notifications']:PersistentAlert("END", "signall100-"..radio)
+        --[[
+            Dispatch Alert ?
+        ]]
+        -- exports['erp_notifications']:PersistentAlert("END", "signall100-"..radio)
     end
 end)
 

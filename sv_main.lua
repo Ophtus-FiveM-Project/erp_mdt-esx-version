@@ -1,11 +1,11 @@
 -- (Start) Opening the MDT and sending data
 
 AddEventHandler('erp_mdt:AddLog', function(text)
-	exports.oxmysql:executeSync('INSERT INTO `pd_logs` (`text`, `time`) VALUES (:text, :time)', { text = text, time = os.time() * 1000 })
+	exports.oxmysql:execute('INSERT INTO `pd_logs` (`text`, `time`) VALUES (:text, :time)', { text = text, time = os.time() * 1000 })
 end)
 
 local function GetNameFromId(cid, cb)
-	cb(exports.oxmysql:executeSync('SELECT firstname, lastname FROM `users` WHERE id = :id LIMIT 1', { id = cid }))
+	cb(exports.oxmysql:execute('SELECT firstname, lastname FROM `users` WHERE id = :id LIMIT 1', { id = cid }))
 end
 
 RegisterCommand("mdt", function(source, args, rawCommand)
@@ -19,45 +19,48 @@ end, false)
 local known100s = {}
 
 RegisterCommand("signal100", function(source, args, rawCommand)
-	TriggerEvent('echorp:getplayerfromid', source, function(result)
-		if result then
-			if result.job and (result.job.isPolice or (result.job.name == 'ambulance' or result.job.name == 'doj')) then
-				local channel = tonumber(args[1])
-				if known100s[channel] then
-					known100s[channel] = nil
-					TriggerClientEvent('erp_mdt:sig100', -1, channel, false)
-				else
-					known100s[channel] = true
-					TriggerClientEvent('erp_mdt:sig100', -1, channel, true)
-				end
+	local _source = source;
+	local xPlayer = ESX.GetPlayerFromId(_source);
+	local job = xPlayer.getJob();
+	local channel = tonumber(args[1]);
+	if (not channel) then return end;
 
-			end
+	if ( xPlayer and ((job.name == 'police') or (job.name == 'ambulance')) ) then
+		if known100s[channel] then
+			known100s[channel] = nil
+			--[[
+				ESX Base : Using TriggerClientEvent('erp_mdt:sig100', -1, channel, false)
+			]]
+
+			exports['Bifrost']:callClientEvent('erp_mdt', -1, channel, false);
+		else
+			known100s[channel] = true
+			exports['Bifrost']:callClientEvent('erp_mdt', -1, channel, true);
+			-- TriggerClientEvent('erp_mdt:sig100', -1, channel, true)
 		end
-	end)
+	end
 end, false)
 
 RegisterNetEvent('erp_mdt:open')
 AddEventHandler('erp_mdt:open', function(source)
-	TriggerEvent('echorp:getplayerfromid', source, function(result)
-		if result then
-			if result.job and (result.job.isPolice or (result.job.name == 'ambulance' or result.job.name == 'doj')) then
-				TriggerEvent('echorp:getJobInfo', result.job.name, function(jobInfo)
-					if jobInfo then
-						TriggerClientEvent('erp_mdt:open', result.source, result.job, jobInfo['grades'][result.job.grade]['label'], result.lastname, result.firstname)
-					end
-				end)
-			end
-		end
-	end)
+	local _source = source;
+	local xPlayer = ESX.GetPlayerFromId(_source);
+	local job = xPlayer.getJob();
+
+	if ( xPlayer and ((job.name == 'police')) ) then
+		TriggerClientEvent('erp_mdt:open', _source, job, job['grade_label'], xPlayer.get('firstname'), xPlayer.get('firstname'))
+	end
 end)
 
-RegisterNetEvent('echorp:playerSpawned')
-AddEventHandler('echorp:playerSpawned', function(PlayerData)
-	local cid = PlayerData['cid']
+RegisterNetEvent('esx:playerLoaded')
+AddEventHandler('esx:playerLoaded', function(playerId, xPlayer, isNew)
+	local identifier = xPlayer.getIdentifier();
+
+	local cid = getCallsignFromAnotherTable(identifier);
 	if cid then
 		local callsign = GetCallsign(cid)
 		if callsign then
-			TriggerClientEvent('erp_mdt:updateCallsign', PlayerData['source'], callsign)
+			TriggerClientEvent('erp_mdt:updateCallsign', xPlayer['source'], callsign)
 		end
 	end
 end)
@@ -66,127 +69,56 @@ function GetCallsign(cid) return GetResourceKvpString(cid..'-callsign') end
 exports('GetCallsign', GetCallsign) -- exports['erp_mdt']:GetCallsign(cid)
 
 AddEventHandler('erp_mdt:open', function(source)
-	TriggerEvent('echorp:getplayerfromid', source, function(result)
-		if result then
-			if result.job and (result.job.isPolice or (result.job.name == 'ambulance' or result.job.name == 'doj')) then
-				local cs = GetCallsign(result.cid)
-				if cs then TriggerClientEvent('erp_mdt:updateCallsign', result['source'], cs) end
-				local lspd, bcso, sast, sasp, doc, sapr, pa, ems = {}, {}, {}, {}, {}, {}, {}, {}
-				local players = exports['echorp']:GetFXPlayers()
-				for k,v in pairs(players) do				
-					if v.job.name == 'lspd' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(lspd, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'bcso' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(bcso, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'sast' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(sast, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'sasp' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(sasp, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'doc' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(doc, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'sapr' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(sapr, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio
-						})
-					elseif v.job.name == 'pa' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(pa, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					elseif v.job.name == 'ambulance' then
-						local Radio = Player(v.source).state.radioChannel or 0
-						if Radio > 100 then
-							Radio = 0
-						end
-						table.insert(ems, {
-							cid = v.cid,
-							name = v.fullname,
-							callsign = GetResourceKvpString(v['cid']..'-callsign'),
-							duty = v.job.duty,
-							radio = Radio,
-							sig100 = known100s[Radio]
-						})
-					end
+	local _source = source;
+	local xPlayer = ESX.GetPlayerFromId(_source);
+	local job = xPlayer.getJob();
+	local identifier = xPlayer.getIdentifier();
+	job['isPolice'] = job.name == 'police';
+
+	if job and (job.isPolice or (job.name == 'ambulance' or job.name == 'doj')) then
+		local cs = GetCallsign(identifier)
+		if cs then
+			TriggerClientEvent('erp_mdt:updateCallsign', _source, cs)
+		end
+		local lspd, bcso, sast, sasp, doc, sapr, pa, ems = {}, {}, {}, {}, {}, {}, {}, {}
+		-- local players = exports['echorp']:GetFXPlayers()
+		local players = ESX.GetPlayers()
+		for k,value in pairs(players) do
+			local v = ESX.GetPlayerFromId(value);
+			if v.job.name == 'lspd' then
+				local Radio = Player(v.source).state.radioChannel or 0
+				if Radio > 100 then
+					Radio = 0
 				end
-				TriggerClientEvent('erp_mdt:getActiveUnits', source, lspd, bcso, sast, sasp, doc, sapr, pa, ems)
+				table.insert(lspd, {
+					cid = v.cid,
+					name = v.fullname,
+					callsign = GetResourceKvpString(v['cid']..'-callsign'),
+					-- duty = v.job.duty,
+					radio = Radio,
+					sig100 = known100s[Radio]
+				})
+			elseif v.job.name == 'ambulance' then
+				local Radio = Player(v.source).state.radioChannel or 0
+				if Radio > 100 then
+					Radio = 0
+				end
+				table.insert(ems, {
+					cid = v.cid,
+					name = v.fullname,
+					callsign = GetResourceKvpString(v['cid']..'-callsign'),
+					-- duty = v.job.duty,
+					radio = Radio,
+					sig100 = known100s[Radio]
+				})
 			end
 		end
-	end)
+		TriggerClientEvent('erp_mdt:getActiveUnits', source, lspd, bcso, sast, sasp, doc, sapr, pa, ems)
+	end
 end)
 
 local function GetIncidentName(id, cb)
-	cb(exports.oxmysql:executeSync('SELECT title FROM `pd_incidents` WHERE id = :id LIMIT 1', { id = id }))
+	cb(exports.oxmysql:execute('SELECT title FROM `pd_incidents` WHERE id = :id LIMIT 1', { id = id }))
 end
 
 AddEventHandler('erp_mdt:open', function(source)
@@ -246,11 +178,11 @@ end)
 -- (Start) Requesting profile information
 
 local function GetConvictions(cid, cb)
-	cb((exports.oxmysql:executeSync('SELECT * FROM `pd_convictions` WHERE `cid`=:cid', { cid = cid })))
+	cb((exports.oxmysql:execute('SELECT * FROM `pd_convictions` WHERE `cid`=:cid', { cid = cid })))
 end
 
 local function GetLicenseInfo(cid, cb)
-	cb(exports.oxmysql:executeSync('SELECT * FROM `licenses` WHERE `cid`=:cid', { cid = cid }))
+	cb(exports.oxmysql:execute('SELECT * FROM `licenses` WHERE `cid`=:cid', { cid = cid }))
 end
 
 RegisterNetEvent('erp_mdt:searchProfile')
@@ -440,7 +372,7 @@ AddEventHandler('erp_mdt:deleteBulletin', function(id)
 				if result.job and result.job.isPolice then
 					exports.oxmysql:execute('SELECT `title` FROM `pd_bulletin` WHERE id=:id LIMIT 1', { id = id}, function(res)
 						if res and res[1] then
-							exports.oxmysql:executeSync("DELETE FROM `pd_bulletin` WHERE id=:id", { id = id })
+							exports.oxmysql:execute("DELETE FROM `pd_bulletin` WHERE id=:id", { id = id })
 							TriggerEvent('erp_mdt:AddLog', "A bulletin was deleted by "..result.firstname.." "..result.lastname.." with the title: "..res[1]['title'].."!")
 							TriggerClientEvent('erp_mdt:deleteBulletin', -1, result.source, id, 'police')
 						end
@@ -448,7 +380,7 @@ AddEventHandler('erp_mdt:deleteBulletin', function(id)
 				elseif result.job and (result.job.name == 'ambulance') then
 					exports.oxmysql:execute('SELECT `title` FROM `ems_bulletin` WHERE id=:id LIMIT 1', { id = id}, function(res)
 						if res and res[1] then
-							exports.oxmysql:executeSync("DELETE FROM `ems_bulletin` WHERE id=:id", { id = id })
+							exports.oxmysql:execute("DELETE FROM `ems_bulletin` WHERE id=:id", { id = id })
 							TriggerEvent('erp_mdt:AddLog', "A bulletin was deleted by "..result.firstname.." "..result.lastname.." with the title: "..res[1]['title'].."!")
 							TriggerClientEvent('erp_mdt:deleteBulletin', -1, result.source, id, result.job.name)
 						end
@@ -456,7 +388,7 @@ AddEventHandler('erp_mdt:deleteBulletin', function(id)
 				elseif result.job and (result.job.name == 'doj') then
 					exports.oxmysql:execute('SELECT `title` FROM `doj_bulletin` WHERE id=:id LIMIT 1', { id = id}, function(res)
 						if res and res[1] then
-							exports.oxmysql:executeSync("DELETE FROM `doj_bulletin` WHERE id=:id", { id = id })
+							exports.oxmysql:execute("DELETE FROM `doj_bulletin` WHERE id=:id", { id = id })
 							TriggerEvent('erp_mdt:AddLog', "A bulletin was deleted by "..result.firstname.." "..result.lastname.." with the title: "..res[1]['title'].."!")
 							TriggerClientEvent('erp_mdt:deleteBulletin', -1, result.source, id, result.job.name)
 						end
@@ -473,11 +405,11 @@ local function CreateUser(cid, dbname, cb)
 end
 
 local function GetPersonInformation(cid, table, cb)
-	cb(exports.oxmysql:executeSync('SELECT information, tags, gallery FROM '..table..' WHERE cid=:cid', { cid = cid }))
+	cb(exports.oxmysql:execute('SELECT information, tags, gallery FROM '..table..' WHERE cid=:cid', { cid = cid }))
 end
 
 local function GetVehicleInformation(cid, cb)
-	cb(exports.oxmysql:executeSync('SELECT id, plate, vehicle FROM owned_vehicles WHERE owner=:cid', { cid = cid }))
+	cb(exports.oxmysql:execute('SELECT id, plate, vehicle FROM owned_vehicles WHERE owner=:cid', { cid = cid }))
 end
 
 RegisterNetEvent('erp_mdt:getProfileData')
@@ -671,12 +603,12 @@ AddEventHandler('erp_mdt:saveProfile', function(pfp, information, cid, fName, sN
 		if result then
 			if result.job and (result.job.isPolice or result.job.name == 'doj') then
 				local function UpdateInfo(id, pfp, desc)
-					exports.oxmysql:executeSync("UPDATE policemdtdata SET `information`=:information WHERE `id`=:id LIMIT 1", { id = id, information = information })
-					exports.oxmysql:executeSync("UPDATE users SET `profilepic`=:profilepic WHERE `id`=:id LIMIT 1", { id = cid, profilepic = pfp })
+					exports.oxmysql:execute("UPDATE policemdtdata SET `information`=:information WHERE `id`=:id LIMIT 1", { id = id, information = information })
+					exports.oxmysql:execute("UPDATE users SET `profilepic`=:profilepic WHERE `id`=:id LIMIT 1", { id = cid, profilepic = pfp })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..cid.." was updated by "..result.fullname)
 
 					if result.job.name == 'doj' then
-						exports.oxmysql:executeSync("UPDATE users SET `firstname`=:firstname, `lastname`=:lastname WHERE `id`=:id LIMIT 1", { firstname = fName, lastname = sName, id = cid })
+						exports.oxmysql:execute("UPDATE users SET `firstname`=:firstname, `lastname`=:lastname WHERE `id`=:id LIMIT 1", { firstname = fName, lastname = sName, id = cid })
 					end
 				end
 
@@ -691,8 +623,8 @@ AddEventHandler('erp_mdt:saveProfile', function(pfp, information, cid, fName, sN
 				end)
 			elseif result.job and (result.job.name == 'ambulance') then
 				local function UpdateInfo(id, pfp, desc)
-					exports.oxmysql:executeSync("UPDATE emsmdtdata SET `information`=:information WHERE `id`=:id LIMIT 1", { id = id, information = information })
-					exports.oxmysql:executeSync("UPDATE users SET `profilepic`=:profilepic WHERE `id`=:id LIMIT 1", { id = cid, profilepic = pfp })
+					exports.oxmysql:execute("UPDATE emsmdtdata SET `information`=:information WHERE `id`=:id LIMIT 1", { id = id, information = information })
+					exports.oxmysql:execute("UPDATE users SET `profilepic`=:profilepic WHERE `id`=:id LIMIT 1", { id = cid, profilepic = pfp })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..cid.." was updated by "..result.fullname)
 				end
 
@@ -716,7 +648,7 @@ AddEventHandler('erp_mdt:newTag', function(cid, tag)
 		if result then
 			if result.job and (result.job.isPolice or result.job.name == 'doj') then
 				local function UpdateTags(id, tags)
-					exports.oxmysql:executeSync("UPDATE policemdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tags) })
+					exports.oxmysql:execute("UPDATE policemdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tags) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." was added a new tag with the text ("..tag..") by "..result.fullname)
 				end
 
@@ -735,7 +667,7 @@ AddEventHandler('erp_mdt:newTag', function(cid, tag)
 				end)
 			elseif result.job and (result.job.name == 'ambulance') then
 				local function UpdateTags(id, tags)
-					exports.oxmysql:executeSync("UPDATE emsmdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tags) })
+					exports.oxmysql:execute("UPDATE emsmdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tags) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." was added a new tag with the text ("..tag..") by "..result.fullname)
 				end
 
@@ -764,7 +696,7 @@ AddEventHandler('erp_mdt:removeProfileTag', function(cid, tagtext)
 			if result.job and (result.job.isPolice or result.job.name == 'doj') then
 
 				local function UpdateTags(id, tag)
-					exports.oxmysql:executeSync("UPDATE policemdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tag) })
+					exports.oxmysql:execute("UPDATE policemdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tag) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." was removed of a tag with the text ("..tagtext..") by "..result.fullname)
 				end
 
@@ -786,7 +718,7 @@ AddEventHandler('erp_mdt:removeProfileTag', function(cid, tagtext)
 			elseif result.job and (result.job.name == 'ambulance') then
 
 				local function UpdateTags(id, tag)
-					exports.oxmysql:executeSync("UPDATE emsmdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tag) })
+					exports.oxmysql:execute("UPDATE emsmdtdata SET `tags`=:tags WHERE `id`=:id LIMIT 1", { id = id, tags = json.encode(tag) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." was removed of a tag with the text ("..tagtext..") by "..result.fullname)
 				end
 
@@ -832,7 +764,7 @@ AddEventHandler('erp_mdt:addGalleryImg', function(cid, img)
 			if result.job and (result.job.isPolice or result.job.name == 'doj') then
 
 				local function UpdateGallery(id, gallery)
-					exports.oxmysql:executeSync("UPDATE policemdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
+					exports.oxmysql:execute("UPDATE policemdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." had their gallery updated (+) by "..result.fullname)
 				end
 
@@ -852,7 +784,7 @@ AddEventHandler('erp_mdt:addGalleryImg', function(cid, img)
 			elseif result.job and (result.job.name == 'ambulance') then
 
 				local function UpdateGallery(id, gallery)
-					exports.oxmysql:executeSync("UPDATE emsmdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
+					exports.oxmysql:execute("UPDATE emsmdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." had their gallery updated (+) by "..result.fullname)
 				end
 
@@ -881,7 +813,7 @@ AddEventHandler('erp_mdt:removeGalleryImg', function(cid, img)
 			if result.job and (result.job.isPolice or result.job.name == 'doj') then
 
 				local function UpdateGallery(id, gallery)
-					exports.oxmysql:executeSync("UPDATE policemdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
+					exports.oxmysql:execute("UPDATE policemdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." had their gallery updated (-) by "..result.fullname)
 				end
 
@@ -906,7 +838,7 @@ AddEventHandler('erp_mdt:removeGalleryImg', function(cid, img)
 			elseif result.job and (result.job.name == 'ambulance') then
 
 				local function UpdateGallery(id, gallery)
-					exports.oxmysql:executeSync("UPDATE emsmdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
+					exports.oxmysql:execute("UPDATE emsmdtdata SET `gallery`=:gallery WHERE `id`=:id LIMIT 1", { id = id, gallery = json.encode(gallery) })
 					TriggerEvent('erp_mdt:AddLog', "A user with the Citizen ID "..id.." had their gallery updated (-) by "..result.fullname)
 				end
 
@@ -1199,7 +1131,7 @@ AddEventHandler('erp_mdt:deleteBolo', function(id)
 		TriggerEvent('echorp:getplayerfromid', source, function(result)
 			if result then
 				if result.job and (result.job.isPolice or result.job.name == 'doj') then
-					exports.oxmysql:executeSync("DELETE FROM `pd_bolos` WHERE id=:id", { id = id })
+					exports.oxmysql:execute("DELETE FROM `pd_bolos` WHERE id=:id", { id = id })
 					TriggerEvent('erp_mdt:AddLog', "A BOLO was deleted by "..result.fullname.." with the ID ("..id..")")
 				end
 			end
@@ -1213,7 +1145,7 @@ AddEventHandler('erp_mdt:deleteICU', function(id)
 		TriggerEvent('echorp:getplayerfromid', source, function(result)
 			if result then
 				if result.job and (result.job.name == 'ambulance') then
-					exports.oxmysql:executeSync("DELETE FROM `ems_icu` WHERE id=:id", { id = id })
+					exports.oxmysql:execute("DELETE FROM `ems_icu` WHERE id=:id", { id = id })
 					TriggerEvent('erp_mdt:AddLog', "A ICU Check-in was deleted by "..result.fullname.." with the ID ("..id..")")
 				end
 			end
@@ -1490,19 +1422,19 @@ end)
 -- DMV
 
 local function GetImpoundStatus(vehicleid, cb)
-	cb( #(exports.oxmysql:executeSync('SELECT id FROM `impound` WHERE `vehicleid`=:vehicleid', {['vehicleid'] = vehicleid })) > 0 )
+	cb( #(exports.oxmysql:execute('SELECT id FROM `impound` WHERE `vehicleid`=:vehicleid', {['vehicleid'] = vehicleid })) > 0 )
 end
 
 local function GetBoloStatus(plate, cb)
-	cb(exports.oxmysql:executeSync('SELECT id FROM `pd_bolos` WHERE LOWER(`plate`)=:plate', { plate = string.lower(plate)}))
+	cb(exports.oxmysql:execute('SELECT id FROM `pd_bolos` WHERE LOWER(`plate`)=:plate', { plate = string.lower(plate)}))
 end
 
 local function GetOwnerName(cid, cb)
-	cb(exports.oxmysql:executeSync('SELECT firstname, lastname FROM `users` WHERE id=:cid LIMIT 1', { cid = cid}))
+	cb(exports.oxmysql:execute('SELECT firstname, lastname FROM `users` WHERE id=:cid LIMIT 1', { cid = cid}))
 end
 
 local function GetVehicleInformation(plate, cb)
-	cb(exports.oxmysql:executeSync('SELECT id, information FROM `pd_vehicleinfo` WHERE plate=:plate', { plate = plate}))
+	cb(exports.oxmysql:execute('SELECT id, information FROM `pd_vehicleinfo` WHERE plate=:plate', { plate = plate}))
 end
 
 RegisterNetEvent('erp_mdt:searchVehicles')
@@ -1613,7 +1545,7 @@ AddEventHandler('erp_mdt:saveVehicleInfo', function(dbid, plate, imageurl, notes
 			if result then
 				if result.job and (result.job.isPolice or result.job.name == 'doj') then
 					if dbid == nil then dbid = 0 end;
-					exports.oxmysql:executeSync("UPDATE owned_vehicles SET `image`=:image WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), image = imageurl })
+					exports.oxmysql:execute("UPDATE owned_vehicles SET `image`=:image WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), image = imageurl })
 					TriggerEvent('erp_mdt:AddLog', "A vehicle with the plate ("..plate..") has a new image ("..imageurl..") edited by "..result['fullname'])
 					if tonumber(dbid) == 0 then
 						exports.oxmysql:insert('INSERT INTO `pd_vehicleinfo` (`plate`, `information`) VALUES (:plate, :information)', { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), information = notes }, function(infoResult)
@@ -1623,7 +1555,7 @@ AddEventHandler('erp_mdt:saveVehicleInfo', function(dbid, plate, imageurl, notes
 							end
 						end)
 					elseif tonumber(dbid) > 0 then
-						exports.oxmysql:executeSync("UPDATE pd_vehicleinfo SET `information`=:information WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), information = notes })
+						exports.oxmysql:execute("UPDATE pd_vehicleinfo SET `information`=:information WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), information = notes })
 					end
 				end
 			end
@@ -1640,16 +1572,16 @@ AddEventHandler('erp_mdt:knownInformation', function(dbid, type, status, plate)
 					if dbid == nil then dbid = 0 end;
 
 					if type == 'code5' and status == true then
-						exports.oxmysql:executeSync("UPDATE owned_vehicles SET `code`=:code WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), code = 5 })
+						exports.oxmysql:execute("UPDATE owned_vehicles SET `code`=:code WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), code = 5 })
 						TriggerEvent('erp_mdt:AddLog', "A vehicle with the plate ("..plate..") was set to CODE 5 by "..result['fullname'])
 					elseif type == 'code5' and not status then
-						exports.oxmysql:executeSync("UPDATE owned_vehicles SET `code`=:code WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), code = 0 })
+						exports.oxmysql:execute("UPDATE owned_vehicles SET `code`=:code WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), code = 0 })
 						TriggerEvent('erp_mdt:AddLog', "A vehicle with the plate ("..plate..") had it's CODE 5 status removed by "..result['fullname'])
 					elseif type == 'stolen' and status then
-						exports.oxmysql:executeSync("UPDATE owned_vehicles SET `stolen`=:stolen WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), stolen = 1 })
+						exports.oxmysql:execute("UPDATE owned_vehicles SET `stolen`=:stolen WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), stolen = 1 })
 						TriggerEvent('erp_mdt:AddLog', "A vehicle with the plate ("..plate..") was set to STOLEN by "..result['fullname'])
 					elseif type == 'stolen' and not status then
-						exports.oxmysql:executeSync("UPDATE owned_vehicles SET `stolen`=:stolen WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), stolen = 0 })
+						exports.oxmysql:execute("UPDATE owned_vehicles SET `stolen`=:stolen WHERE `plate`=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1"), stolen = 0 })
 						TriggerEvent('erp_mdt:AddLog', "A vehicle with the plate ("..plate..") had it's STOLEN status removed by "..result['fullname'])
 					end
 
@@ -2001,7 +1933,7 @@ AddEventHandler('erp_mdt:toggleDuty', function(cid, status)
 				local isPolice = false
 				if policeJobs[player.job.name] then isPolice = true end;
 				exports['echorp']:SetPlayerData(player.source, 'job', {name = player.job.name, grade = player.job.grade, duty = status, isPolice = isPolice})
-				exports.oxmysql:executeSync("UPDATE users SET duty=:duty WHERE id=:cid", { duty = status, cid = cid})
+				exports.oxmysql:execute("UPDATE users SET duty=:duty WHERE id=:cid", { duty = status, cid = cid})
 				if status == 0 then
 					TriggerEvent('erp_mdt:AddLog', result['fullname'].." set "..player['fullname']..'\'s duty to 10-7')
 				else
@@ -2027,7 +1959,7 @@ AddEventHandler('erp_mdt:setCallsign', function(cid, newcallsign)
 end)
 
 local function fuckme(cid, incident, data, cb)
-	cb(exports.oxmysql:executeSync('SELECT * FROM pd_convictions WHERE cid=:cid AND linkedincident=:linkedincident', { cid = cid, linkedincident = id }), data)
+	cb(exports.oxmysql:execute('SELECT * FROM pd_convictions WHERE cid=:cid AND linkedincident=:linkedincident', { cid = cid, linkedincident = id }), data)
 end
 
 RegisterNetEvent('erp_mdt:saveIncident')
@@ -2049,7 +1981,7 @@ AddEventHandler('erp_mdt:saveIncident', function(id, title, information, tags, o
 					}, function(infoResult)
 						if infoResult then
 							for i=1, #associated do
-								exports.oxmysql:executeSync('INSERT INTO `pd_convictions` (`cid`, `linkedincident`, `warrant`, `guilty`, `processed`, `associated`, `charges`, `fine`, `sentence`, `recfine`, `recsentence`, `time`) VALUES (:cid, :linkedincident, :warrant, :guilty, :processed, :associated, :charges, :fine, :sentence, :recfine, :recsentence, :time)', {
+								exports.oxmysql:execute('INSERT INTO `pd_convictions` (`cid`, `linkedincident`, `warrant`, `guilty`, `processed`, `associated`, `charges`, `fine`, `sentence`, `recfine`, `recsentence`, `time`) VALUES (:cid, :linkedincident, :warrant, :guilty, :processed, :associated, :charges, :fine, :sentence, :recfine, :recsentence, :time)', {
 									cid = tonumber(associated[i]['Cid']),
 									linkedincident = infoResult,
 									warrant = associated[i]['Warrant'],
@@ -2069,7 +2001,7 @@ AddEventHandler('erp_mdt:saveIncident', function(id, title, information, tags, o
 						end
 					end)
 				elseif id > 0 then
-					exports.oxmysql:executeSync("UPDATE pd_incidents SET title=:title, details=:details, civsinvolved=:civsinvolved, tags=:tags, officersinvolved=:officersinvolved, evidence=:evidence WHERE id=:id", {
+					exports.oxmysql:execute("UPDATE pd_incidents SET title=:title, details=:details, civsinvolved=:civsinvolved, tags=:tags, officersinvolved=:officersinvolved, evidence=:evidence WHERE id=:id", {
 						title = title,
 						details = information,
 						tags = json.encode(tags),
@@ -2093,7 +2025,7 @@ AddEventHandler('erp_mdt:handleExistingConvictions', function(data, incidentid, 
 		linkedincident = incidentid
 	}, function(convictionRes)
 		if convictionRes and convictionRes[1] and convictionRes[1]['id'] then
-			exports.oxmysql:executeSync('UPDATE pd_convictions SET cid=:cid, linkedincident=:linkedincident, warrant=:warrant, guilty=:guilty, processed=:processed, associated=:associated, charges=:charges, fine=:fine, sentence=:sentence, recfine=:recfine, recsentence=:recsentence WHERE cid=:cid AND linkedincident=:linkedincident', {
+			exports.oxmysql:execute('UPDATE pd_convictions SET cid=:cid, linkedincident=:linkedincident, warrant=:warrant, guilty=:guilty, processed=:processed, associated=:associated, charges=:charges, fine=:fine, sentence=:sentence, recfine=:recfine, recsentence=:recsentence WHERE cid=:cid AND linkedincident=:linkedincident', {
 				cid = data['Cid'],
 				linkedincident = incidentid,
 				warrant = data['Warrant'],
@@ -2107,7 +2039,7 @@ AddEventHandler('erp_mdt:handleExistingConvictions', function(data, incidentid, 
 				recsentence = tonumber(data['recsentence']),
 			})
 		else
-			exports.oxmysql:executeSync('INSERT INTO `pd_convictions` (`cid`, `linkedincident`, `warrant`, `guilty`, `processed`, `associated`, `charges`, `fine`, `sentence`, `recfine`, `recsentence`, `time`) VALUES (:cid, :linkedincident, :warrant, :guilty, :processed, :associated, :charges, :fine, :sentence, :recfine, :recsentence, :time)', {
+			exports.oxmysql:execute('INSERT INTO `pd_convictions` (`cid`, `linkedincident`, `warrant`, `guilty`, `processed`, `associated`, `charges`, `fine`, `sentence`, `recfine`, `recsentence`, `time`) VALUES (:cid, :linkedincident, :warrant, :guilty, :processed, :associated, :charges, :fine, :sentence, :recfine, :recsentence, :time)', {
 				cid = tonumber(data['Cid']),
 				linkedincident = incidentid,
 				warrant = data['Warrant'],
@@ -2127,7 +2059,7 @@ end)
 
 RegisterNetEvent('erp_mdt:removeIncidentCriminal')
 AddEventHandler('erp_mdt:removeIncidentCriminal', function(cid, incident)
-	exports.oxmysql:executeSync('DELETE FROM pd_convictions WHERE cid=:cid AND linkedincident=:linkedincident', { 
+	exports.oxmysql:execute('DELETE FROM pd_convictions WHERE cid=:cid AND linkedincident=:linkedincident', { 
 		cid = cid,
 		linkedincident = incident
 	})
@@ -2465,7 +2397,7 @@ AddEventHandler('erp_mdt:removeImpound', function(plate)
 				exports.oxmysql:execute("SELECT id, plate FROM `owned_vehicles` WHERE plate=:plate LIMIT 1", { plate = string.gsub(plate, "^%s*(.-)%s*$", "%1")}, function(vehicle)
 					if vehicle and vehicle[1] then
 						local data = vehicle[1]
-						exports.oxmysql:executeSync("DELETE FROM `impound` WHERE vehicleid=:vehicleid", { vehicleid = data['id'] })
+						exports.oxmysql:execute("DELETE FROM `impound` WHERE vehicleid=:vehicleid", { vehicleid = data['id'] })
 					end
 				end)
 			end
