@@ -2507,7 +2507,7 @@ $(document).ready(() => {
                 document.documentElement.style.setProperty('--color-6', '#121f2c');
                 document.documentElement.style.setProperty('--color-7', 'rgb(28, 54, 82)');
                 document.documentElement.style.setProperty('--color-8', '#2554cc');
-                $(".badge-logo").attr('src','img/sasp_badge.png');
+                $(".badge-logo").attr('src','img/LSPDLOGO.png');
                 $(".header-title").html("SAN ANDREAS STATE POLICE");
                 $(".bolo-nav-item").html("BOLOs");
                 $(".bolos-search-title").html("Bolos");                

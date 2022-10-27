@@ -11,6 +11,10 @@ shared_script '@es_extended/imports.lua';
 shared_script '@ox_lib/init.lua';
 shared_script '@Yggdrasill/imports.lua';
 
+shared_scripts {
+    'sh_penalcode.lua'
+}
+
 server_scripts {
     'sv_provider.lua',
     'sv_main.lua'

@@ -844,13 +844,8 @@ AddEventHandler('erp_mdt:getAllLogs', function(sentData)
 end)
 
 RegisterNUICallback("getPenalCode", function(data, cb)
-    TriggerServerEvent('erp_mdt:getPenalCode')
     cb(true)
-end)
-
-RegisterNetEvent('erp_mdt:getPenalCode')
-AddEventHandler('erp_mdt:getPenalCode', function(titles, penalcode)
-    SendNUIMessage({ type = "getPenalCode", titles = titles, penalcode = penalcode })
+    SendNUIMessage({ type = "getPenalCode", titles = Config['PenalCodeTitles'], penalcode = Config['PenalCode'] })
 end)
 
 RegisterNetEvent('erp_mdt:getActiveUnits')
