@@ -91,8 +91,8 @@ AddEventHandler('erp_mdt:open', function(source)
 					Radio = 0
 				end
 				table.insert(lspd, {
-					cid = v.cid,
-					name = v.fullname,
+					cid = v.source,
+					name = v.getName(),
 					callsign = GetResourceKvpString(v['cid']..'-callsign'),
 					-- duty = v.job.duty,
 					radio = Radio,
@@ -104,8 +104,8 @@ AddEventHandler('erp_mdt:open', function(source)
 					Radio = 0
 				end
 				table.insert(ems, {
-					cid = v.cid,
-					name = v.fullname,
+					cid = v.source,
+					name = v.getName(),
 					callsign = GetResourceKvpString(v['cid']..'-callsign'),
 					-- duty = v.job.duty,
 					radio = Radio,
@@ -1911,13 +1911,7 @@ AddEventHandler('erp_mdt:getPenalCode', function()
 end)
 
 local policeJobs = {
-	['lspd'] = true,
-	['bcso'] = true,
-	['sast'] = true,
-	['sasp'] = true,
-	['doc'] = true,
-	['sapr'] = true,
-	['pa'] = true
+	['police'] = true
 }
 
 RegisterNetEvent('erp_mdt:toggleDuty')
@@ -2424,5 +2418,3 @@ AddEventHandler('erp_mdt:statusImpound', function(plate)
 		end
 	end)
 end)
-
-				
